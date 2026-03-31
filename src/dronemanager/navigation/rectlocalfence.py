@@ -70,7 +70,7 @@ class RectLocalFence(Fence):
             return speed_limit
 
         speed_limit_down = _limit_speed(self.down_upper - z, speed_limit_down, acceleration_vertical)
-        speed_limit_up = _limit_speed(z- self.down_lower, speed_limit_up, acceleration_vertical)
+        speed_limit_up = _limit_speed(z - self.down_lower, speed_limit_up, acceleration_vertical)
 
         def _adjust_input(c_input, speed, speed_limit_a, speed_limit_b, max_speed_a, max_speed_b):
             if speed > 0 and speed > speed_limit_a:
@@ -79,9 +79,11 @@ class RectLocalFence(Fence):
                 c_input = c_input * speed_limit_b / max_speed_b
             return c_input
 
+        self.logger.info(f"{vertical_input, max_speed_up, max_speed_down}")
         vertical_speed = vertical_input * max_speed_up if vertical_input < 0 else vertical_input * max_speed_down
         vertical_input = _adjust_input(vertical_input, vertical_speed, speed_limit_down, speed_limit_up,
                                        max_speed_down, max_speed_up)
+        self.logger.info(f"Adjusted vertical input {vertical_input}")
 
         # for horizontal motion, determine the input heading in the fence coordinate system and then determine the
         # distance to the fence following the line from the current position along the input heading, then scale both
@@ -124,6 +126,12 @@ class RectLocalFence(Fence):
 
         forward_input *= scaling_factor 
         right_input *= scaling_factor
+
+        for stick_input in [forward_input, right_input, vertical_input]:
+            if stick_input > .99: 
+                stick_input = .99
+            if stick_input < -.99:
+                stick_input = -.99
 
         #self.logger.info(f"{scaling_factor, speed_limit_horizontal, drone.config.max_h_vel, distance_horizontal, acceleration_horizontal}")
 
