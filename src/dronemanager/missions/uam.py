@@ -204,6 +204,7 @@ class UAMMission(Mission):
                         #battery.level += 1 / FakeBattery.TIME_SCALE / self.update_rate / 2
                         #if battery.level > 1.0:
                         battery.level = 1.0
+                self.additional_info = {"bat": self.battery_levels}
             except asyncio.CancelledError:
                 return
             except Exception as e:
