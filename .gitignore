@@ -50,6 +50,12 @@ coverage.xml
 
 .idea/
 
+#venv
+dmvenv/
+
+# firewall setup
+firewall_setup/
+
 # Sphinx documentation
 docs/_build/
 
