@@ -10,6 +10,8 @@
 import asyncio
 import math
 import random
+import os
+import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -23,7 +25,8 @@ from dronemanager.drone import DroneMAVSDK
 
 RANDOM_SEED = 42
 
-NUM_WAYPOINTS = 40
+
+NUM_WAYPOINTS = 10
 
 # LiDAR / funnel definition in global NED-like coordinates.
 # NED: [north, east, down]
@@ -55,48 +58,179 @@ PAUSE_BETWEEN_WAYPOINTS_S = 1.0
 LOAD_EXTERNAL_PLUGIN = True
 
 
-# Important:
-# home_offset_ned should match the PX4_GZ_MODEL_POSE spawn position.
-#
-# Example:
-# PX4_GZ_MODEL_POSE="0,2,0,0,0,0" means:
-# home_offset_ned = [0, 2, 0]
-#
-# If all drones are spawned at the same Gazebo origin, use [0, 0, 0],
-# but for multi-drone simulation you should spawn them separated.
-DRONES = {
-    "drone1": {
-        "connection": "udp://:14541",
-        "home_offset_ned": [0.0, 0.0, 0.0],
-        "yaw": 0.0,
-    },
-    "drone2": {
-        "connection": "udp://:14542",
-        "home_offset_ned": [0.0, 0.0, 0.0],
-        "yaw": 0.0,
-    },
-    "drone3": {
-        "connection": "udp://:14543",
-        "home_offset_ned": [0.0, 0.0, 0.0],
-        "yaw": 0.0,
-    },
-    "drone4": {
-        "connection": "udp://:14544",
-        "home_offset_ned": [0.0, 0.0, 0.0],
-        "yaw": 0.0,
-    },
-    "drone5": {
-        "connection": "udp://:14545",
-        "home_offset_ned": [0.0, 0.0, 0.0],
-        "yaw": 0.0,
-    },
-    "drone6": {
-        "connection": "udp://:14546",
-        "home_offset_ned": [0.0, 0.0, 0.0],
-        "yaw": 0.0,
-    },
-}
+# ============================================================
+# PX4 / DRONE STARTUP CONFIG
+# ============================================================
 
+# Choose how many drones to use.
+# Valid range: 1 to 6.
+NUM_ACTIVE_DRONES = 2
+
+# If True, this script starts PX4 SITL instances automatically via WSL.
+AUTO_START_PX4 = False
+
+# If True, this script tries to terminate the PX4 processes at the end.
+STOP_PX4_ON_EXIT = True
+
+# Path inside WSL to your PX4-Autopilot folder.
+PX4_AUTOPILOT_WSL_DIR = "/mnt/c/Users/mklemensthi/Documents/TONIC/PX4-Autopilot"
+
+PX4_BINARY = "./build/px4_sitl_default/bin/px4"
+PX4_SYS_AUTOSTART = "4001"
+PX4_SIM_MODEL = "gz_x500"
+
+# You have been using -i 1 ... -i 6.
+PX4_FIRST_INSTANCE_INDEX = 1
+
+
+# Startup timing.
+PX4_START_DELAY_BETWEEN_DRONES_S = 5.0
+PX4_WAIT_AFTER_ALL_STARTED_S = 20.0
+
+
+def validate_num_drones(num_drones: int):
+    if not 1 <= num_drones <= 6:
+        raise ValueError("NUM_ACTIVE_DRONES must be between 1 and 6.")
+
+
+
+def px4_instance_index_for_drone_number(drone_number: int) -> int:
+    """
+    drone1 -> PX4 -i 1
+    drone2 -> PX4 -i 2
+    ...
+    """
+    return PX4_FIRST_INSTANCE_INDEX + (drone_number - 1)
+
+
+def mavsdk_port_for_px4_instance(px4_instance_index: int) -> int:
+    """
+    PX4 SITL convention:
+        -i 1 -> udp://:14541
+        -i 2 -> udp://:14542
+        ...
+    """
+    return 14540 + px4_instance_index
+
+
+def build_drone_config(num_drones: int):
+    validate_num_drones(num_drones)
+
+    drones = {}
+
+    for drone_number in range(1, num_drones + 1):
+        drone_id = f"drone{drone_number}"
+
+        px4_idx = px4_instance_index_for_drone_number(drone_number)
+        mavsdk_port = mavsdk_port_for_px4_instance(px4_idx)
+
+        drones[drone_id] = {
+            "connection": f"udp://:{mavsdk_port}",
+            "home_offset_ned": [0.0, 0.0, 0.0],
+            "yaw": 0.0,
+            "px4_instance_index": px4_idx,
+            "spawn_pose": [0.0, float(px4_idx*2), 0.0, 0.0, 0.0, 0.0],
+        }
+
+    return drones
+
+
+DRONES = build_drone_config(NUM_ACTIVE_DRONES)
+
+def build_px4_command(drone_id: str, cfg: dict) -> str:
+    px4_idx = cfg["px4_instance_index"]
+    x, y, z, roll, pitch, yaw = cfg["spawn_pose"]
+
+    pose_string = f"{x},{y},{z},{roll},{pitch},{yaw}"
+
+    command = (
+        f'cd "{PX4_AUTOPILOT_WSL_DIR}" && '
+        f'PX4_SYS_AUTOSTART={PX4_SYS_AUTOSTART} '
+        f'PX4_SIM_MODEL={PX4_SIM_MODEL} '
+        f'PX4_GZ_MODEL_POSE="{pose_string}" '
+        f'{PX4_BINARY} -i {px4_idx}'
+    )
+
+    return command
+
+
+def start_px4_instances():
+    """
+    Starts PX4 SITL instances.
+
+    If this Python script runs on Windows, it calls:
+        wsl.exe bash -lc "<px4 command>"
+
+    If this Python script runs inside WSL/Linux, it calls:
+        bash -lc "<px4 command>"
+    """
+    if not AUTO_START_PX4:
+        return []
+
+    processes = []
+
+    print("\nStarting PX4 SITL instances...")
+    print("=" * 80)
+
+    for drone_id, cfg in DRONES.items():
+        command = build_px4_command(drone_id, cfg)
+
+        print(f"[{drone_id}] PX4 command:")
+        print(command)
+        print()
+
+        if os.name == "nt":
+            # Running Python on Windows, launch inside WSL.
+            proc = subprocess.Popen(
+                ["wsl.exe", "bash", "-lc", command],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            # Running Python already inside WSL/Linux.
+            proc = subprocess.Popen(
+                ["bash", "-lc", command],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        processes.append(proc)
+
+        # Starting all PX4 instances at exactly the same time can be unstable.
+        # A small delay helps Gazebo/PX4 initialize cleanly.
+        if PX4_START_DELAY_BETWEEN_DRONES_S > 0:
+            import time
+            time.sleep(PX4_START_DELAY_BETWEEN_DRONES_S)
+        
+        #if this is the first iteration add another sleep
+        if drone_id == "drone1" and PX4_START_DELAY_BETWEEN_DRONES_S > 0:
+            print(f"Waiting {PX4_WAIT_AFTER_ALL_STARTED_S} seconds for PX4/Gazebo startup...\n")
+            time.sleep(PX4_WAIT_AFTER_ALL_STARTED_S)
+
+    print(f"Started {len(processes)} PX4 process(es).")
+    
+
+    return processes
+
+
+def stop_px4_instances(processes):
+    if not processes:
+        return
+
+    print("\nStopping PX4 SITL instances...")
+
+    for proc in processes:
+        if proc.poll() is None:
+            proc.terminate()
+
+    import time
+    time.sleep(3.0)
+
+    for proc in processes:
+        if proc.poll() is None:
+            proc.kill()
+
+    print("PX4 processes stopped.")
 
 # ============================================================
 # GEOMETRY HELPERS
@@ -324,7 +458,7 @@ async def connect_drone(dm, drone_id: str, connection: str):
     await dm.connect_to_drone(
         name=drone_id,
         drone_address=connection,
-        timeout=30,
+        timeout=500,
     )
 
     if drone_id not in dm.drones:
@@ -414,6 +548,11 @@ async def land_and_disarm(dm, drone_id: str):
 async def main():
     random.seed(RANDOM_SEED)
 
+    px4_processes = []
+
+    if AUTO_START_PX4:
+        px4_processes = start_px4_instances()
+
     # 1. Generate paths in global NED space.
     global_paths = generate_multi_drone_global_paths()
     print_paths(global_paths)
@@ -436,10 +575,9 @@ async def main():
 
     try:
         # 3. Connect all drones.
-        await asyncio.gather(*[
-            connect_drone(dm, drone_id, cfg["connection"])
-            for drone_id, cfg in DRONES.items()
-        ])
+        for drone_id, cfg in DRONES.items():
+            await connect_drone(dm, drone_id, cfg["connection"])
+            await asyncio.sleep(2.0)
 
         print("Connected drones:", list(dm.drones.keys()))
 
@@ -478,6 +616,9 @@ async def main():
     finally:
         print("[main] Closing DroneManager")
         await dm.close()
+
+        if STOP_PX4_ON_EXIT:
+            stop_px4_instances(px4_processes)
 
 
 if __name__ == "__main__":
