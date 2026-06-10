@@ -1,11 +1,11 @@
 #In PX4, for each drone have one terminal open and increase drone index and start position:
 #
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,2,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 1
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,4,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 2
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,6,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 3
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,8,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 4
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,10,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 5
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,12,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 6
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,0,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 1
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,8,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 2
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,16,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 3
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,24,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 4
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,32,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 5
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,40,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 6
 
 import asyncio
 import math
@@ -17,44 +17,44 @@ from dronemanager.drone import DroneMAVSDK
 DRONES = {
     "drone1": {
         "connection": "udp://:14541",  # PX4 -i 1
-        "radius": 1.2,
-        "height": 1.7,
-        "num_waypoints": 8,
+        "radius": 3.9,
+        "height": 4.7,
+        "num_waypoints": 14,
         "yaw": 0.0,
     },
     "drone2": {
         "connection": "udp://:14542",  # PX4 -i 2
         "radius": 3.0,
-        "height": 0.9,
+        "height": 3.2,
         "num_waypoints": 14,
         "yaw": 0.0,
     },
     "drone3": {
         "connection": "udp://:14543",  # PX4 -i 3
         "radius": 2.5,
-        "height": 1.3,
-        "num_waypoints": 12,
+        "height": 4.1,
+        "num_waypoints": 14,
         "yaw": 0.0,
     },
         "drone4": {
         "connection": "udp://:14544",  # PX4 -i 4
         "radius": 3.5,
-        "height": 1.7,
-        "num_waypoints": 18,
+        "height": 4.5,
+        "num_waypoints": 14,
         "yaw": 0.0,
     },
         "drone5": {
         "connection": "udp://:14545",  # PX4 -i 5
         "radius": 1.8,
-        "height": 2.1,
-        "num_waypoints": 8,
+        "height": 3.9,
+        "num_waypoints": 14,
         "yaw": 0.0,
     },
         "drone6": {
         "connection": "udp://:14546",  # PX4 -i 6
         "radius": 3.5,
-        "height": 1.3,
-        "num_waypoints": 18,
+        "height": 4.1,
+        "num_waypoints": 14,
         "yaw": 0.0,
     },
 }

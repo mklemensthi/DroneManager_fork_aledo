@@ -1,11 +1,11 @@
 #In PX4, for each drone have one terminal open and increase drone index and start position:
 #
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,2,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 1
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,4,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 2
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,6,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 3
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,8,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 4
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,10,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 5
-# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,12,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 6
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,0,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 1
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,8,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 2
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,16,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 3
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,24,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 4
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,32,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 5
+# PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,40,0,0,0,0" ./build/px4_sitl_default/bin/px4 -i 6
 
 import asyncio
 import math
@@ -23,10 +23,10 @@ from dronemanager.drone import DroneMAVSDK
 # USER CONFIG
 # ============================================================
 
-RANDOM_SEED = 42
+RANDOM_SEED = 49
 
 
-NUM_WAYPOINTS = 10
+NUM_WAYPOINTS = 20
 
 # LiDAR / funnel definition in global NED-like coordinates.
 # NED: [north, east, down]
@@ -64,7 +64,7 @@ LOAD_EXTERNAL_PLUGIN = True
 
 # Choose how many drones to use.
 # Valid range: 1 to 6.
-NUM_ACTIVE_DRONES = 2
+NUM_ACTIVE_DRONES = 1
 
 # If True, this script starts PX4 SITL instances automatically via WSL.
 AUTO_START_PX4 = False
