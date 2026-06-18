@@ -23,22 +23,32 @@ from dronemanager.drone import DroneMAVSDK
 # USER CONFIG
 # ============================================================
 
-RANDOM_SEED = 49
+RANDOM_SEED = 42
 
 
 NUM_WAYPOINTS = 20
 
-# LiDAR / funnel definition in global NED-like coordinates.
+# LiDAR definition in global NED-like coordinates.
 # NED: [north, east, down]
-# 150 m height above ground means down = -150.
+# z/down = -4 means the LiDAR is 4 m above the ground.
+#
+# Geometry model:
+#   Upright 360-degree spinning LiDAR.
+#   The LiDAR rotates around the vertical z/down axis.
+#   Its vertical field of view is FOV_DEG.
+#
+# Valid points satisfy:
+#   horizontal_range = sqrt(north_offset^2 + east_offset^2)
+#   MIN_HORIZONTAL_DISTANCE_M <= horizontal_range <= LIDAR_RANGE_M
+#   abs(down_offset) <= horizontal_range * tan(FOV_DEG / 2)
 LIDAR_NED = [0.0, 0.0, -4.0]
 
 LIDAR_RANGE_M = 4.0
 FOV_DEG = 45.0
 
-# Avoid points too close to the cone apex, because the valid cross-section
-# becomes tiny there.
-MIN_AXIS_DISTANCE_M = 0.75
+# Avoid points very close to the LiDAR vertical axis.
+# Near the sensor centerline the valid vertical FOV height becomes very small.
+MIN_HORIZONTAL_DISTANCE_M = 0.75
 
 # Consecutive waypoint step length.
 STEP_DISTANCE_MIN_M = 0.5
@@ -64,7 +74,7 @@ LOAD_EXTERNAL_PLUGIN = True
 
 # Choose how many drones to use.
 # Valid range: 1 to 6.
-NUM_ACTIVE_DRONES = 1
+NUM_ACTIVE_DRONES = 3
 
 # If True, this script starts PX4 SITL instances automatically via WSL.
 AUTO_START_PX4 = False
@@ -262,65 +272,89 @@ def random_unit_vector_3d():
     return [r * math.cos(theta), r * math.sin(theta), z]
 
 
+
+def max_vertical_offset_for_horizontal_range(horizontal_range: float) -> float:
+    """
+    Maximum allowed vertical/down offset for a given horizontal range.
+
+    The LiDAR is modeled as an upright 360-degree spinning sensor:
+        horizontal_range = sqrt(north_offset^2 + east_offset^2)
+
+    The vertical field of view creates an upper and lower cone around
+    the horizontal scan plane:
+        abs(down_offset) <= horizontal_range * tan(FOV_DEG / 2)
+    """
+    return horizontal_range * math.tan(math.radians(FOV_DEG / 2.0))
+
+
 def is_inside_lidar_bicone(point_ned: List[float]) -> bool:
     """
-    Checks whether point_ned lies inside a double cone / bicone.
+    Backward-compatible name, but the geometry is no longer a sideways LiDAR volume.
 
-    Axis is the north direction through the LiDAR.
-    Perpendicular plane is east/down.
+    Checks whether point_ned lies inside an upright 360-degree LiDAR volume.
 
     LiDAR-relative coordinates:
-        axis distance = north offset
-        radial distance = sqrt(east_offset^2 + down_offset^2)
+        north_offset = rel[0]
+        east_offset  = rel[1]
+        down_offset  = rel[2]
 
-    Full FOV is FOV_DEG, so half-angle is FOV_DEG / 2.
+    The LiDAR rotates around the vertical down/z axis. Therefore, the
+    horizontal range is computed in the north/east plane and the FOV limits
+    the allowed vertical offset.
+
+    Valid region:
+        MIN_HORIZONTAL_DISTANCE_M <= sqrt(north^2 + east^2) <= LIDAR_RANGE_M
+        abs(down) <= sqrt(north^2 + east^2) * tan(FOV_DEG / 2)
     """
     rel = vec_sub(point_ned, LIDAR_NED)
 
-    axis = rel[0]  # north axis
+    north = rel[0]
     east = rel[1]
     down = rel[2]
 
-    abs_axis = abs(axis)
+    horizontal_range = math.sqrt(north * north + east * east)
 
-    if abs_axis < MIN_AXIS_DISTANCE_M:
+    if horizontal_range < MIN_HORIZONTAL_DISTANCE_M:
         return False
 
-    if abs_axis > LIDAR_RANGE_M:
+    if horizontal_range > LIDAR_RANGE_M:
         return False
 
-    half_angle_rad = math.radians(FOV_DEG / 2.0)
-    max_radius = abs_axis * math.tan(half_angle_rad)
+    max_vertical_offset = max_vertical_offset_for_horizontal_range(horizontal_range)
 
-    radial = math.sqrt(east * east + down * down)
-
-    return radial <= max_radius
+    return abs(down) <= max_vertical_offset
 
 
 def sample_random_point_in_lidar_bicone() -> List[float]:
     """
-    Samples one random point inside the LiDAR bicone.
+    Backward-compatible name.
 
-    The sampling is not mathematically perfect uniform volume sampling,
-    but it is good enough for trajectory generation and gives broad coverage.
+    Samples one random point inside the upright 360-degree LiDAR volume.
+
+    The point is sampled by:
+        1. choosing a horizontal range in the north/east plane,
+        2. choosing a random bearing around the LiDAR,
+        3. choosing a vertical/down offset inside the vertical FOV at that range.
     """
-    half_angle_rad = math.radians(FOV_DEG / 2.0)
+    for _ in range(10000):
+        # Area-uniform sampling in the horizontal annulus.
+        horizontal_range = math.sqrt(
+            random.uniform(
+                MIN_HORIZONTAL_DISTANCE_M * MIN_HORIZONTAL_DISTANCE_M,
+                LIDAR_RANGE_M * LIDAR_RANGE_M,
+            )
+        )
 
-    while True:
-        sign = random.choice([-1.0, 1.0])
-        axis = sign * random.uniform(MIN_AXIS_DISTANCE_M, LIDAR_RANGE_M)
+        bearing = random.uniform(0.0, 2.0 * math.pi)
 
-        max_radius = abs(axis) * math.tan(half_angle_rad)
+        north = horizontal_range * math.cos(bearing)
+        east = horizontal_range * math.sin(bearing)
 
-        # sqrt(random) gives a more uniform disk area distribution.
-        radial = math.sqrt(random.random()) * max_radius
-        angle = random.uniform(0.0, 2.0 * math.pi)
-
-        east = radial * math.cos(angle)
-        down = radial * math.sin(angle)
+        max_vertical_offset = max_vertical_offset_for_horizontal_range(horizontal_range)
+        down = random.uniform(-max_vertical_offset, max_vertical_offset)
 
         point = [
-            LIDAR_NED[0] + axis,
+            LIDAR_NED[0] + north,
             LIDAR_NED[1] + east,
             LIDAR_NED[2] + down,
         ]
@@ -328,11 +362,16 @@ def sample_random_point_in_lidar_bicone() -> List[float]:
         if is_inside_lidar_bicone(point):
             return point
 
+    raise RuntimeError("Could not sample a valid point inside the upright LiDAR volume.")
+
 
 def sample_next_point_near_previous(previous_point: List[float]) -> List[float]:
     """
-    Samples a new point inside the bicone at a distance of 5-15 m
+    Samples a new point inside the upright LiDAR volume at a local step distance
     from the previous point.
+
+    This preserves the original "random local trajectory" behavior, but uses the
+    corrected upright LiDAR validity check.
     """
     for _ in range(1000):
         step_length = random.uniform(STEP_DISTANCE_MIN_M, STEP_DISTANCE_MAX_M)
@@ -347,9 +386,8 @@ def sample_next_point_near_previous(previous_point: List[float]) -> List[float]:
         if is_inside_lidar_bicone(candidate):
             return candidate
 
-    # Fallback: if local rejection fails, sample anywhere in the bicone.
+    # Fallback: if local rejection fails, sample anywhere in the LiDAR volume.
     return sample_random_point_in_lidar_bicone()
-
 
 def global_ned_to_drone_local(global_point_ned: List[float], home_offset_ned: List[float]) -> List[float]:
     """
@@ -382,7 +420,7 @@ def generate_multi_drone_global_paths() -> Dict[str, List[List[float]]]:
     Generates NUM_WAYPOINTS global NED waypoints for each drone.
 
     Properties:
-    - first point for every drone is widely random inside the bicone
+    - first point for every drone is widely random inside the upright LiDAR volume
     - consecutive points are 5-15 m apart
     - drones are separated from each other at every waypoint index
     """
@@ -433,20 +471,50 @@ def generate_multi_drone_global_paths() -> Dict[str, List[List[float]]]:
     return paths
 
 
+
+def lidar_relative_metadata(point_ned: List[float]) -> dict:
+    rel = vec_sub(point_ned, LIDAR_NED)
+    north = rel[0]
+    east = rel[1]
+    down = rel[2]
+
+    horizontal_range = math.sqrt(north * north + east * east)
+    max_vertical_offset = max(max_vertical_offset_for_horizontal_range(horizontal_range), 1e-9)
+    bearing_rad = math.atan2(east, north)
+    bearing_deg = math.degrees(bearing_rad)
+
+    return {
+        "north": north,
+        "east": east,
+        "down": down,
+        "horizontal_range": horizontal_range,
+        "range_3d": math.sqrt(horizontal_range * horizontal_range + down * down),
+        "bearing_deg": bearing_deg,
+        "vertical_fraction": down / max_vertical_offset,
+        "distance_to_vertical_fov_edge_fraction": max(0.0, 1.0 - abs(down) / max_vertical_offset),
+    }
+
+
 def print_paths(global_paths: Dict[str, List[List[float]]]):
     print("\nGenerated global NED waypoints:")
+    print("=" * 80)
+    print("Geometry: upright 360-degree LiDAR")
+    print("Valid region: horizontal_range <= LIDAR_RANGE_M and abs(down_offset) <= horizontal_range * tan(FOV/2)")
     print("=" * 80)
 
     for drone_id, path in global_paths.items():
         print(f"\n{drone_id}:")
         for idx, p in enumerate(path):
             rel_to_lidar = vec_sub(p, LIDAR_NED)
+            meta = lidar_relative_metadata(p)
             print(
                 f"  WP {idx + 1}: "
                 f"global_ned=[{p[0]:7.2f}, {p[1]:7.2f}, {p[2]:7.2f}], "
-                f"rel_to_lidar=[{rel_to_lidar[0]:7.2f}, {rel_to_lidar[1]:7.2f}, {rel_to_lidar[2]:7.2f}]"
+                f"rel_to_lidar=[{rel_to_lidar[0]:7.2f}, {rel_to_lidar[1]:7.2f}, {rel_to_lidar[2]:7.2f}], "
+                f"h_range={meta['horizontal_range']:6.2f}, "
+                f"bearing={meta['bearing_deg']:7.1f} deg, "
+                f"vertical_frac={meta['vertical_fraction']:6.2f}"
             )
-
 
 # ============================================================
 # DRONEMANAGER HELPERS
