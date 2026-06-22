@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# 20000 Lidar Point Clouds are a good baseline for training the detection model (see nuscenes paper)
+# Lidar records data at 20 Hz - 1000 seconds of flight time or 16 minutes in total
+
 """
 scenario_driven_multi_drone.py
 
@@ -61,7 +65,7 @@ from dronemanager.drone import DroneMAVSDK
 
 # Set to a scenario name to force one scenario.
 # Leave as None to sample according to SCENARIO_LIBRARY weights.
-FORCE_SCENARIO_NAME = "single_drone_crossing"
+FORCE_SCENARIO_NAME = "single_drone_full_volume_coverage"
 RANDOM_SEED = None
 RUN_ID_PREFIX = "scenario_run"
 MANIFEST_ROOT = Path("C:/Datasets/UnityLidarDrone_scenario_manifests")
